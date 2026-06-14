@@ -12,6 +12,8 @@ from mymodel import myLM
 from preprocess.vocab import Vocab
 from randomness import set_global_random_seed
 
+import os
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_path', type=str, default='./trained_model/model_ep2311.pt', help='model file')
 parser.add_argument('--theme', type=str, required=True, help='theme midi file (MELODY=prog0, PAD=prog88)')
@@ -21,8 +23,6 @@ parser.add_argument('--cuda', action='store_true', help='use CUDA')
 parser.add_argument('--max_len', type=int, default=512, help='decoder context window (tokens)')
 parser.add_argument('--temp', type=float, default=1.2, help='temperature')
 parser.add_argument('--gen_seconds', type=float, default=60.0, help='length of music to generate (seconds)')
-parser.add_argument('--pitch_min', type=int, default=0, help='generated pitch floor (inclusive)')
-parser.add_argument('--pitch_max', type=int, default=127, help='generated pitch ceiling (inclusive)')
 args = parser.parse_args()
 
 if not args.seed == -1:
@@ -31,17 +31,8 @@ if not args.seed == -1:
 # create vocab
 myvocab = Vocab()
 
-# Note-On token ids whose pitch is outside [pitch_min, pitch_max] -> masked out at generation
-forbidden_pitch_ids = [tid for tok, tid in myvocab.token2id.items()
-                       if tok.startswith("Note-On")
-                       and not (args.pitch_min <= int(tok.split("_")[1]) <= args.pitch_max)]
-if forbidden_pitch_ids:
-    print("Restricting generated pitch to [{}, {}] ({} Note-On tokens masked)".format(
-        args.pitch_min, args.pitch_max, len(forbidden_pitch_ids)))
-
-# devices (auto-detect GPU; on Colab CUDA is used without needing --cuda)
-use_cuda = args.cuda or torch.cuda.is_available()
-device = torch.device('cuda:0' if use_cuda else 'cpu')
+# devices
+device = torch.device('cuda:0' if args.cuda else 'cpu')
 
 # model definition
 model = myLM(myvocab.n_tokens, d_model=256, num_encoder_layers=6, xorpattern=[0, 0, 0, 1, 1, 1])
@@ -111,10 +102,6 @@ def inference(target_seconds, strategies, params, theme_seq, prompt=None):
             logits = model(src=input_theme, tgt=input_x, tgt_label=label_input, tgt_mask=input_x_att_msk)
             logits = torch.squeeze(logits[-1:]).cpu().numpy()
 
-            # mask out-of-range pitches so they can never be generated
-            if forbidden_pitch_ids:
-                logits[forbidden_pitch_ids] = -1e9
-
             if 'temperature' in strategies:
                 probs = model.temperature(logits=logits, temperature=params['t'])
             else:
@@ -173,6 +160,11 @@ def inference(target_seconds, strategies, params, theme_seq, prompt=None):
 # theme condition from a theme midi (no theme info track needed; wrap with Theme markers)
 given_theme = myvocab.midi2TSD(args.theme, theme_annotations=False)
 given_theme = [myvocab.token2id["Theme_Start"]] + given_theme + [myvocab.token2id["Theme_End"]]
+
+
+import sys
+print(given_theme)
+sys.exit(0)
 
 model.to(device)
 word_seq = inference(
