@@ -106,8 +106,10 @@ async function start() {
   }
 
   running   = true;
-  // Use server's epoch timestamp so piano roll clock matches MIDI scheduler clock
-  wallStart = res.wall_start_epoch * 1000;  // epoch ms
+  // Sync piano roll clock with MIDI scheduler: use server epoch time if available
+  wallStart = res.wall_start_epoch
+    ? res.wall_start_epoch * 1000   // epoch ms — aligns with server's time.time()
+    : Date.now();                   // fallback: approximate (may drift slightly)
   $("start-btn").disabled   = true;
   $("stop-btn").disabled    = false;
   $("seed-select").disabled = true;

@@ -51,26 +51,34 @@ class ChunkGenerator(threading.Thread):
     # ── public API ────────────────────────────────────────────────────────────
 
     def init_seed(self, seed_tokens: list[int]):
-        """Set the initial decoder context from seed MIDI tokens (literal)."""
-        # Decoder always starts with Theme_Start as first token
-        ts_id = self.vocab.token2id["Theme_Start"]
-        self.context = [ts_id] + list(seed_tokens)
+        """Set the initial decoder context from seed MIDI tokens (literal).
 
-        # Build label list: Theme_Start opens the theme region (label increments),
-        # but seed music tokens are outside the theme region so they get label=0.
-        # We mark Theme_Start as label=1 and immediately close (previous_labeled=False)
-        # so generated continuation stays unlabeled.
-        self.label_list = [0] * len(self.context)
+        Context: [Theme_Start, *seed_tokens, Theme_End]
+        Labels:  [1, 2, ..., N+1, 0]
+
+        This matches the training format: seed tokens are labeled as the theme
+        (positions 1..N+1), Theme_End closes the region (label 0), and all
+        subsequent generated tokens also get label 0 (outside theme).
+        """
+        ts_id = self.vocab.token2id["Theme_Start"]
+        te_id = self.vocab.token2id["Theme_End"]
+        self.context = [ts_id] + list(seed_tokens) + [te_id]
+
+        self.label_list = []
         prev = False
-        for i, tok_id in enumerate(self.context):
+        cnt = 0
+        for tok_id in self.context:
             tok = self.vocab.id2token[tok_id]
             if tok == "Theme_Start":
                 prev = True
-            elif tok == "Theme_End":
-                prev = False
+            if tok == "Theme_End":
+                prev = False   # close BEFORE computing label (matches _append_token)
             if prev:
-                self.label_list[i] = 1 if i == 0 else self.label_list[i - 1] + 1
-        self.previous_labeled = prev
+                cnt += 1
+                self.label_list.append(cnt)
+            else:
+                self.label_list.append(0)
+        self.previous_labeled = prev   # False after Theme_End
 
     def update_theme(self, new_theme_seq: list[int]):
         """Thread-safe encoder theme update (called on anchor injection)."""
