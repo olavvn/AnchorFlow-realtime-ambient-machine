@@ -1,7 +1,7 @@
 """ThemeTransformer 실시간 스트리밍 웹서버.
 
-Theme MIDI → 인코더 조건 → 무한 자기회귀 생성.
-Seed로 시작하고, 앵커가 주입되면 리터럴하게 컨텍스트에 삽입.
+Seed MIDI → 인코더 theme 조건 → 무한 자기회귀 생성.
+Anchor 주입 시 인코더 theme 교체 → 이후 생성이 새 theme 조건으로 전환.
 생성된 토큰 → SSE(피아노롤 시각화) + rtmidi loopMIDI(MELODY/PAD 각각 별도 포트).
 
 실행:
@@ -38,7 +38,6 @@ WEBAPP_DIR  = Path(__file__).resolve().parent
 STATIC_DIR  = WEBAPP_DIR / "static"
 SEEDS_DIR   = WEBAPP_DIR / "assets" / "seeds"
 ANCHORS_DIR = WEBAPP_DIR / "assets" / "anchors"
-THEMES_DIR  = ROOT / "theme_files"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -228,13 +227,19 @@ class MIDIScheduler:
 # 생성 세션
 # ─────────────────────────────────────────────────────────────────────────────
 class WebSession:
+    """생성 세션.
+
+    seed_theme_seq  → ChunkGenerator 인코더 입력 (theme).
+    anchor 주입 시  → 인코더 theme 교체 (디코더 컨텍스트는 유지).
+    디코더는 decoder context만 누적하며 자유 생성.
+    """
+
     def __init__(
         self,
         model,
         vocab: Vocab,
         device,
-        theme_seq: List[int],
-        seed_tokens: List[int],
+        seed_theme_seq: List[int],   # seed MIDI → Theme_Start + tokens + Theme_End
         scheduler: MIDIScheduler,
         *,
         temp: float = 1.2,
@@ -257,40 +262,25 @@ class WebSession:
         self.decoder = TSDStreamingDecoder(vocab)
 
         self._gen = ChunkGenerator(
-            model=model, vocab=vocab, theme_seq=theme_seq, device=device,
+            model=model, vocab=vocab, theme_seq=seed_theme_seq, device=device,
             anchor_queue=self._anchor_q, token_queue=self._token_q,
             chunk_size=chunk_size, max_len=max_len,
             temp=temp, top_p=top_p,
             pitch_min=pitch_min, pitch_max=pitch_max,
         )
-        self._gen.init_seed(seed_tokens)
+        # 디코더는 Theme_Start 하나만으로 시작 (seed는 인코더 쪽에서 조건으로 작용)
+        self._gen.init_seed([])
 
         self._wall_start: float = 0.0
-
-        # seed 이벤트를 SSE에 먼저 방출 (피아노롤 시각화용)
-        if seed_tokens:
-            seed_events = self.decoder.feed(seed_tokens, "seed")
-            self.sse_q.put({"kind": "marker", "t": 0.0, "src": "seed", "label": "SEED"})
-            for e in seed_events:
-                self.sse_q.put(e)
+        # seed 시작 마커만 SSE에 방출
+        self.sse_q.put({"kind": "marker", "t": 0.0, "src": "seed", "label": "SEED"})
 
     def start(self):
         self._running = True
         self._wall_start = time.perf_counter()
         self.scheduler.start(self._wall_start)
-
-        # seed 노트를 MIDI 스케줄러에도 등록 (SSE에 이미 방출한 이벤트 재활용 불가 → decoder 재활성 X)
-        # → seed는 스케줄러가 시작되기 전에 도착하므로 seed를 MIDI로도 재생하려면
-        #   session 생성 시점에서 스케줄하면 됨 (wall_start 이전이라 약간 과거지만 무시 가능)
-        #   실용적으로 seed는 보통 짧으므로 MIDI 출력 생략하거나 즉시 재생 가능.
-        #   여기서는 seed를 MIDI에도 보낸다.
-        for item in list(self.sse_q.queue):
-            if isinstance(item, dict):
-                self.scheduler.schedule(item)
-
         self._gen.start()
-        t = threading.Thread(target=self._reader_loop, daemon=True)
-        t.start()
+        threading.Thread(target=self._reader_loop, daemon=True).start()
 
     def stop(self):
         self._running = False
@@ -298,7 +288,9 @@ class WebSession:
         self.scheduler.stop()
 
     def feed_anchor(self, label: str, midi_path: str):
+        """앵커를 큐에 넣고 SSE 마커 방출. 실제 theme 교체는 generator 스레드에서 처리."""
         self._anchor_q.put(midi_path)
+        # 마커 t는 decoder의 현재 음악시간 기준
         self.sse_q.put({"kind": "marker", "t": round(self.decoder.t, 4),
                         "src": "anchor", "label": label})
 
@@ -317,7 +309,6 @@ class WebSession:
 
     def _reader_loop(self):
         while self._running:
-            # lead_cap: 생성이 wall_elapsed보다 lead_cap 이상 앞서면 대기
             elapsed = time.perf_counter() - self._wall_start
             if (self.decoder.t - elapsed) > self.lead_cap:
                 time.sleep(0.05)
@@ -328,8 +319,11 @@ class WebSession:
             except queue.Empty:
                 continue
 
-            src = "anchor" if kind == "anchor" else "gen"
-            events = self.decoder.feed(tokens, src)
+            # anchor_signal: theme 교체 신호 (토큰 없음, SSE 마커는 feed_anchor에서 이미 방출)
+            if kind == "anchor_signal":
+                continue
+
+            events = self.decoder.feed(tokens, "gen")
             for ev in events:
                 self.sse_q.put(ev)
                 self.scheduler.schedule(ev)
@@ -371,7 +365,7 @@ def _list_midis(d: Path) -> List[dict]:
 
 
 def _resolve(category: str, mid_id: str) -> Path:
-    base = {"theme": THEMES_DIR, "seed": SEEDS_DIR, "anchor": ANCHORS_DIR}[category]
+    base = {"seed": SEEDS_DIR, "anchor": ANCHORS_DIR}[category]
     p = (base / mid_id).resolve()
     if not str(p).startswith(str(base.resolve())):
         raise ValueError("invalid path")
@@ -397,7 +391,6 @@ def static_files(fname):
 @app.route("/api/library")
 def library():
     return jsonify({
-        "themes":  _list_midis(THEMES_DIR),
         "seeds":   _list_midis(SEEDS_DIR),
         "anchors": _list_midis(ANCHORS_DIR),
         "device":  HOLDER.device,
@@ -415,27 +408,21 @@ def start():
     global SESSION
     data = request.get_json(force=True)
 
-    theme_id = data.get("theme_id")
-    seed_id  = data.get("seed_id")
+    seed_id = data.get("seed_id")
+    if not seed_id:
+        return jsonify({"error": "seed_id is required"}), 400
 
     try:
-        theme_path = _resolve("theme", theme_id)
-        theme_tokens = _midi_to_tokens(theme_path, HOLDER.vocab)
-        theme_seq = (
+        seed_path   = _resolve("seed", seed_id)
+        seed_tokens = _midi_to_tokens(seed_path, HOLDER.vocab)
+        # seed → 인코더 theme 시퀀스
+        seed_theme_seq = (
             [HOLDER.vocab.token2id["Theme_Start"]]
-            + theme_tokens
+            + seed_tokens
             + [HOLDER.vocab.token2id["Theme_End"]]
         )
     except Exception as e:
-        return jsonify({"error": f"theme load failed: {e}"}), 400
-
-    seed_tokens: List[int] = []
-    if seed_id:
-        try:
-            seed_path  = _resolve("seed", seed_id)
-            seed_tokens = _midi_to_tokens(seed_path, HOLDER.vocab)
-        except Exception as e:
-            return jsonify({"error": f"seed load failed: {e}"}), 400
+        return jsonify({"error": f"seed load failed: {e}"}), 400
 
     with SESSION_LOCK:
         if SESSION is not None:
@@ -444,8 +431,7 @@ def start():
             model=HOLDER.model,
             vocab=HOLDER.vocab,
             device=HOLDER.device,
-            theme_seq=theme_seq,
-            seed_tokens=seed_tokens,
+            seed_theme_seq=seed_theme_seq,
             scheduler=SCHEDULER,
             temp=float(data.get("temperature", 1.2)),
             top_p=float(data.get("top_p", 0.9)),
@@ -460,7 +446,7 @@ def start():
 
     return jsonify({
         "ok": True,
-        "theme": theme_path.stem,
+        "seed": seed_path.stem,
         "seed_tokens": len(seed_tokens),
         "device": HOLDER.device,
     })

@@ -52,17 +52,9 @@ async function loadLibrary() {
     $("midi-badge").classList.add("ok");
   }
 
-  // Theme 목록
-  const ts = $("theme-select");
-  ts.innerHTML = "";
-  (lib.themes || []).forEach(t => {
-    const o = document.createElement("option");
-    o.value = t.id; o.textContent = "◆ " + t.name; ts.appendChild(o);
-  });
-
   // Seed 목록
   const ss = $("seed-select");
-  ss.innerHTML = '<option value="">— seed 없음 —</option>';
+  ss.innerHTML = "";
   (lib.seeds || []).forEach(s => {
     const o = document.createElement("option");
     o.value = s.id; o.textContent = "▣ " + s.name; ss.appendChild(o);
@@ -93,8 +85,7 @@ async function start() {
   $("hint").textContent = "생성 시작 중…";
 
   const body = {
-    theme_id:    $("theme-select").value,
-    seed_id:     $("seed-select").value || null,
+    seed_id:     $("seed-select").value,
     temperature: parseFloat($("temp").value),
     top_p:       parseFloat($("topp").value),
     pitch_min:   parseInt($("pmin").value),
@@ -115,10 +106,9 @@ async function start() {
 
   running   = true;
   wallStart = performance.now();
-  $("start-btn").disabled     = true;
-  $("stop-btn").disabled      = false;
-  $("theme-select").disabled  = true;
-  $("seed-select").disabled   = true;
+  $("start-btn").disabled   = true;
+  $("stop-btn").disabled    = false;
+  $("seed-select").disabled = true;
   setChipsEnabled(true);
   setState("playing");
   $("hint").textContent = "재생 중 · Anchor를 누르면 컨텍스트에 리터럴 삽입됩니다.";
@@ -130,10 +120,9 @@ async function stop() {
   if (es) { es.close(); es = null; }
   try { await fetch("/api/stop", { method: "POST" }); } catch (e) {}
   setState("idle");
-  $("start-btn").disabled    = false;
-  $("stop-btn").disabled     = true;
-  $("theme-select").disabled = false;
-  $("seed-select").disabled  = false;
+  $("start-btn").disabled   = false;
+  $("stop-btn").disabled    = true;
+  $("seed-select").disabled = false;
   setChipsEnabled(false);
   $("hint").textContent = "정지됨. ▶ 를 눌러 다시 시작하세요.";
 }
