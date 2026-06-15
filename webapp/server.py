@@ -239,7 +239,7 @@ class WebSession:
         model,
         vocab: Vocab,
         device,
-        seed_theme_seq: List[int],   # seed MIDI → Theme_Start + tokens + Theme_End
+        seed_tokens: List[int],      # seed MIDI raw tokens (리터럴 재생 + 인코더 theme)
         scheduler: MIDIScheduler,
         *,
         temp: float = 1.2,
@@ -261,6 +261,13 @@ class WebSession:
 
         self.decoder = TSDStreamingDecoder(vocab)
 
+        # seed → 인코더 theme (Theme_Start + tokens + Theme_End)
+        seed_theme_seq = (
+            [vocab.token2id["Theme_Start"]]
+            + seed_tokens
+            + [vocab.token2id["Theme_End"]]
+        )
+
         self._gen = ChunkGenerator(
             model=model, vocab=vocab, theme_seq=seed_theme_seq, device=device,
             anchor_queue=self._anchor_q, token_queue=self._token_q,
@@ -268,17 +275,26 @@ class WebSession:
             temp=temp, top_p=top_p,
             pitch_min=pitch_min, pitch_max=pitch_max,
         )
-        # 디코더는 Theme_Start 하나만으로 시작 (seed는 인코더 쪽에서 조건으로 작용)
-        self._gen.init_seed([])
+        # seed → 디코더 컨텍스트 리터럴 삽입
+        self._gen.init_seed(seed_tokens)
 
         self._wall_start: float = 0.0
-        # seed 시작 마커만 SSE에 방출
+
+        # seed 노트를 SSE에 선 방출 (피아노롤 시각화)
         self.sse_q.put({"kind": "marker", "t": 0.0, "src": "seed", "label": "SEED"})
+        if seed_tokens:
+            for ev in self.decoder.feed(seed_tokens, "seed"):
+                self.sse_q.put(ev)
 
     def start(self):
         self._running = True
         self._wall_start = time.perf_counter()
         self.scheduler.start(self._wall_start)
+
+        # seed 노트를 MIDI 스케줄러에도 등록 (리터럴 재생)
+        for item in list(self.sse_q.queue):
+            self.scheduler.schedule(item)
+
         self._gen.start()
         threading.Thread(target=self._reader_loop, daemon=True).start()
 
@@ -319,11 +335,8 @@ class WebSession:
             except queue.Empty:
                 continue
 
-            # anchor_signal: theme 교체 신호 (토큰 없음, SSE 마커는 feed_anchor에서 이미 방출)
-            if kind == "anchor_signal":
-                continue
-
-            events = self.decoder.feed(tokens, "gen")
+            src = "anchor" if kind == "anchor" else "gen"
+            events = self.decoder.feed(tokens, src)
             for ev in events:
                 self.sse_q.put(ev)
                 self.scheduler.schedule(ev)
@@ -415,12 +428,6 @@ def start():
     try:
         seed_path   = _resolve("seed", seed_id)
         seed_tokens = _midi_to_tokens(seed_path, HOLDER.vocab)
-        # seed → 인코더 theme 시퀀스
-        seed_theme_seq = (
-            [HOLDER.vocab.token2id["Theme_Start"]]
-            + seed_tokens
-            + [HOLDER.vocab.token2id["Theme_End"]]
-        )
     except Exception as e:
         return jsonify({"error": f"seed load failed: {e}"}), 400
 
@@ -431,7 +438,7 @@ def start():
             model=HOLDER.model,
             vocab=HOLDER.vocab,
             device=HOLDER.device,
-            seed_theme_seq=seed_theme_seq,
+            seed_tokens=seed_tokens,
             scheduler=SCHEDULER,
             temp=float(data.get("temperature", 1.2)),
             top_p=float(data.get("top_p", 0.9)),

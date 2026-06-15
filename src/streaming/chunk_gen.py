@@ -96,15 +96,20 @@ class ChunkGenerator(threading.Thread):
         self.context.append(tok_id)
         self.label_list.append(label)
 
-    def _inject_anchor(self, midi_path: str):
-        """Anchor updates the encoder theme (not the decoder context)."""
+    def _inject_anchor(self, midi_path: str) -> list[int]:
+        """Anchor: (1) literally appended to decoder context, (2) becomes new encoder theme."""
         anchor_tokens = self.vocab.midi2TSD(midi_path, theme_annotations=False)
+        # 1. update encoder theme
         new_theme_seq = (
             [self.vocab.token2id["Theme_Start"]]
             + anchor_tokens
             + [self.vocab.token2id["Theme_End"]]
         )
         self.update_theme(new_theme_seq)
+        # 2. literally insert into decoder context
+        for tok_id in anchor_tokens:
+            self._append_token(tok_id)
+        return anchor_tokens
 
     def _sample_next(self) -> tuple[int, str] | None:
         """Run one forward pass and sample a token. Returns (tok_id, tok_str) or None."""
@@ -176,11 +181,12 @@ class ChunkGenerator(threading.Thread):
         self.model.eval()
 
         while not self._stop_event.is_set():
-            # 1. Anchor injection → updates encoder theme only (no decoder context change)
+            # 1. Anchor: literal decoder insertion + encoder theme update
             anchor_path = self.anchor_queue.get_nowait()
             if anchor_path is not None:
-                self._inject_anchor(anchor_path)
-                self.token_queue.put(("anchor_signal", []))  # SSE marker용 신호
+                anchor_tokens = self._inject_anchor(anchor_path)
+                if anchor_tokens:
+                    self.token_queue.put(("anchor", anchor_tokens))
                 continue
 
             # 2. Generate one chunk
