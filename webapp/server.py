@@ -84,7 +84,7 @@ class TSDStreamingDecoder:
 
             elif tok.startswith("Note-Duration-") and self._pending is not None:
                 steps = int(tok.split("_")[1])
-                self._pending["dur"] = round(steps * self.vocab.time_resolution, 4)
+                self._pending["dur"] = round(steps * self.vocab.time_resolution * self.time_scale, 4)
                 i += 1
 
             elif tok.startswith("Note-Velocity-") and self._pending is not None and "dur" in self._pending:
@@ -299,6 +299,7 @@ class WebSession:
     def start(self):
         self._running = True
         self._wall_start = time.perf_counter()
+        self._wall_start_epoch = time.time()   # epoch seconds — sent to client for sync
         self.scheduler.start(self._wall_start)
 
         # seed 노트를 MIDI 스케줄러에도 등록 (리터럴 재생)
@@ -467,6 +468,7 @@ def start():
         "seed": seed_path.stem,
         "seed_tokens": len(seed_tokens),
         "device": HOLDER.device,
+        "wall_start_epoch": sess._wall_start_epoch,
     })
 
 
@@ -517,7 +519,7 @@ def stream():
                 yield "event: idle\ndata: {}\n\n"
                 time.sleep(0.5)
                 continue
-            events = sess.drain_sse(timeout=0.3)
+            events = sess.drain_sse(timeout=0.05)
             if events:
                 yield "data: " + json.dumps(events) + "\n\n"
             else:

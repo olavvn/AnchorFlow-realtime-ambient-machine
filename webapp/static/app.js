@@ -106,7 +106,8 @@ async function start() {
   }
 
   running   = true;
-  wallStart = performance.now();
+  // Use server's epoch timestamp so piano roll clock matches MIDI scheduler clock
+  wallStart = res.wall_start_epoch * 1000;  // epoch ms
   $("start-btn").disabled   = true;
   $("stop-btn").disabled    = false;
   $("seed-select").disabled = true;
@@ -181,7 +182,7 @@ function setState(s) {
 // ── 현재 음악시간 (wall-clock 기준 1:1) ─────────────────────
 function musicalNow() {
   if (!wallStart) return 0;
-  return (performance.now() - wallStart) / 1000;
+  return (Date.now() - wallStart) / 1000;
 }
 
 // ── 피아노롤 렌더링 ──────────────────────────────────────────
