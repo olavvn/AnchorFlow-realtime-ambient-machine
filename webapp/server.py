@@ -48,8 +48,9 @@ ANCHORS_DIR = WEBAPP_DIR / "assets" / "anchors"
 class TSDStreamingDecoder:
     """청크 경계를 넘어 상태를 유지하는 TSD→노트이벤트 변환기."""
 
-    def __init__(self, vocab: Vocab):
+    def __init__(self, vocab: Vocab, time_scale: float = 0.5):
         self.vocab = vocab
+        self.time_scale = time_scale   # 1.0 = 원속도, 0.5 = 2배 촘촘
         self.t = 0.0
         self._pending: Optional[dict] = None
         self._buf: List[int] = []   # 미완성 Note-On/Duration 보관
@@ -67,7 +68,7 @@ class TSDStreamingDecoder:
 
             if tok.startswith("Time-Shift_"):
                 steps = int(tok.split("_")[1])
-                self.t += steps * self.vocab.time_resolution
+                self.t += steps * self.vocab.time_resolution * self.time_scale
                 i += 1
 
             elif tok.startswith("Note-On-"):
@@ -256,7 +257,8 @@ class WebSession:
         max_len: int = 512,
         pitch_min: int = 0,
         pitch_max: int = 127,
-        lead_cap: float = 20.0,
+        lead_cap: float = 8.0,
+        time_scale: float = 0.5,
     ):
         self.vocab     = vocab
         self.scheduler = scheduler
@@ -267,7 +269,7 @@ class WebSession:
         self._anchor_q = AnchorQueue()
         self._token_q  = TokenChunkQueue(maxsize=8)
 
-        self.decoder = TSDStreamingDecoder(vocab)
+        self.decoder = TSDStreamingDecoder(vocab, time_scale=time_scale)
 
         # seed → 인코더 theme (Theme_Start + tokens + Theme_End)
         seed_theme_seq = (
@@ -454,7 +456,8 @@ def start():
             max_len=int(data.get("max_len", 512)),
             pitch_min=int(data.get("pitch_min", 0)),
             pitch_max=int(data.get("pitch_max", 127)),
-            lead_cap=float(data.get("lead_cap", 20.0)),
+            lead_cap=float(data.get("lead_cap", 8.0)),
+            time_scale=float(data.get("time_scale", 0.5)),
         )
         sess.start()
         SESSION = sess

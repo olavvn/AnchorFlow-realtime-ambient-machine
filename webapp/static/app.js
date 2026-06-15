@@ -9,7 +9,7 @@ const $ = (id) => document.getElementById(id);
 
 // ── 피아노롤 파라미터 ─────────────────────────────────────────
 const WINDOW_PAST   = 4.0;   // 플레이헤드 뒤로 보일 구간(초)
-const WINDOW_FUTURE = 20.0;  // 앞으로 보일 구간(초)
+const WINDOW_FUTURE = 30.0;  // 앞으로 보일 구간(초)
 const PRUNE_AGE     = 10.0;  // 이보다 오래된 노트 폐기
 
 // ── 색상 ─────────────────────────────────────────────────────
@@ -88,6 +88,7 @@ async function start() {
     seed_id:     $("seed-select").value,
     temperature: parseFloat($("temp").value),
     top_p:       parseFloat($("topp").value),
+    time_scale:  parseFloat($("tscale").value),
     pitch_min:   parseInt($("pmin").value),
     pitch_max:   parseInt($("pmax").value),
     chunk_size:  32,
@@ -195,7 +196,7 @@ function fitCanvas() {
 }
 window.addEventListener("resize", fitCanvas);
 
-const PITCH_MIN = 24, PITCH_MAX = 96;
+const PITCH_MIN = 12, PITCH_MAX = 108;
 
 function draw() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -296,6 +297,7 @@ $("panic-btn").addEventListener("click", async () => {
 });
 $("temp").addEventListener("input", e => $("temp-val").textContent = parseFloat(e.target.value).toFixed(2));
 $("topp").addEventListener("input", e => $("topp-val").textContent = parseFloat(e.target.value).toFixed(2));
+$("tscale").addEventListener("input", e => $("tscale-val").textContent = parseFloat(e.target.value).toFixed(2));
 $("pmin").addEventListener("input", e => $("pmin-val").textContent = e.target.value);
 $("pmax").addEventListener("input", e => $("pmax-val").textContent = e.target.value);
 
