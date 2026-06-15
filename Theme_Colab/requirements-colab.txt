@@ -1,3 +1,0 @@
-# Google Colab already ships torch + numpy (GPU build).
-# Only this extra package is needed for preprocessing / inference:
-pretty_midi==0.2.10
