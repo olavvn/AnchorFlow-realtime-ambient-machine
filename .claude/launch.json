@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ThemeTransformer Web",
+      "runtimeExecutable": "D:\\학교\\26.1\\Deep Learning for Music and Audio\\Project\\ambient_v2\\Ambient\\myenv\\Scripts\\python.exe",
+      "runtimeArgs": ["webapp/server.py", "--model-path", "trained_model/model_ep325.pt", "--melody-port", "loopMIDI Port", "--pad-port", "loopMIDI Port"],
+      "port": 5000
+    }
+  ]
+}

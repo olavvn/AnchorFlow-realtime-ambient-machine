@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ThemeTransformer · 실시간 앰비언트 스트리밍</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <div class="title">
+      <span class="logo">◈</span> ThemeTransformer
+      <span class="sub">Theme 조건 · Seed 시작 · Anchor 리터럴 주입 · loopMIDI 출력</span>
+    </div>
+    <div class="badges">
+      <span id="device-badge" class="badge">device: …</span>
+      <span id="midi-badge"   class="badge">MIDI: …</span>
+      <span id="state-badge"  class="badge state-idle">idle</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- 좌측: 컨트롤 -->
+    <section class="panel controls">
+
+      <h2>1 · Theme 선택</h2>
+      <label class="field">
+        <span>Theme MIDI <small>(인코더 조건)</small></span>
+        <select id="theme-select"></select>
+      </label>
+
+      <h2>2 · Seed 선택</h2>
+      <label class="field">
+        <span>Seed MIDI <small>(선택 · 스트림 시작 리터럴)</small></span>
+        <select id="seed-select">
+          <option value="">— seed 없음 (테마만으로 시작) —</option>
+        </select>
+      </label>
+
+      <h2>3 · 샘플링</h2>
+      <label class="slider">
+        <span>temperature <b id="temp-val">1.20</b></span>
+        <input type="range" id="temp" min="0.5" max="2.0" step="0.01" value="1.2" />
+      </label>
+      <label class="slider">
+        <span>top_p <b id="topp-val">0.90</b></span>
+        <input type="range" id="topp" min="0.5" max="1.0" step="0.01" value="0.9" />
+      </label>
+      <label class="slider">
+        <span>pitch min <b id="pmin-val">0</b></span>
+        <input type="range" id="pmin" min="0" max="127" step="1" value="0" />
+      </label>
+      <label class="slider">
+        <span>pitch max <b id="pmax-val">127</b></span>
+        <input type="range" id="pmax" min="0" max="127" step="1" value="127" />
+      </label>
+
+      <h2>4 · 재생</h2>
+      <div class="btn-row">
+        <button id="start-btn" class="primary">▶ 시작</button>
+        <button id="stop-btn" class="ghost" disabled>■ 정지</button>
+      </div>
+
+      <div class="meters">
+        <div class="meter">
+          <span>생성 앞서기</span>
+          <div class="bar"><div id="buf-bar"></div></div>
+          <b id="buf-val">0.0s</b>
+        </div>
+        <div class="meter">
+          <span>재생시간</span><b id="clock">0:00</b>
+        </div>
+        <div class="meter">
+          <span>노트</span><b id="note-count">0</b>
+        </div>
+      </div>
+
+      <h2>MIDI 포트</h2>
+      <div class="port-info">
+        <div class="port-row"><span class="port-label melody-dot">MELODY</span><span id="port-melody">–</span></div>
+        <div class="port-row"><span class="port-label pad-dot">PAD</span><span id="port-pad">–</span></div>
+      </div>
+    </section>
+
+    <!-- 중앙: 피아노롤 -->
+    <section class="panel roll-panel">
+      <div class="roll-head">
+        <h2>실시간 피아노롤</h2>
+        <div class="legend">
+          <span class="lg seed">Seed</span>
+          <span class="lg melody">MELODY</span>
+          <span class="lg pad">PAD</span>
+          <span class="lg anchor">Anchor</span>
+        </div>
+      </div>
+      <canvas id="roll"></canvas>
+      <div id="hint" class="hint">Theme를 고르고 ▶ 를 누르면 생성이 시작됩니다.</div>
+    </section>
+
+    <!-- 우측: Anchor 주입 -->
+    <section class="panel anchors">
+      <h2>Anchor 주입</h2>
+      <p class="desc">클릭하면 현재 컨텍스트에 <b>리터럴 삽입</b>되고, 모델이 그 패턴으로 자연스럽게 이어갑니다.</p>
+      <div id="anchor-list" class="chip-list"></div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
