@@ -15,7 +15,9 @@ import heapq
 import itertools
 import json
 import os
+import atexit
 import queue
+import signal
 import sys
 import threading
 import time
@@ -169,15 +171,21 @@ class MIDIScheduler:
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
 
+    def panic(self):
+        """All Sound Off + All Notes Off on all 16 channels for both ports."""
+        for port in (self._melody_out, self._pad_out):
+            if port is None:
+                continue
+            try:
+                for ch in range(16):
+                    port.send_message([0xB0 | ch, 120, 0])  # All Sound Off
+                    port.send_message([0xB0 | ch, 123, 0])  # All Notes Off
+            except Exception:
+                pass
+
     def stop(self):
         self._stop.set()
-        try:
-            if self._melody_out:
-                self._melody_out.send_message([0xB0, 123, 0])
-            if self._pad_out:
-                self._pad_out.send_message([0xB0, 123, 0])
-        except Exception:
-            pass
+        self.panic()
 
     def schedule(self, event: dict):
         if event.get("kind") != "note":
@@ -484,6 +492,18 @@ def stop():
     return jsonify({"ok": True})
 
 
+@app.route("/api/panic", methods=["POST"])
+def panic():
+    """All Sound Off + All Notes Off — 소리가 계속 날 때 긴급 정지."""
+    global SESSION
+    with SESSION_LOCK:
+        if SESSION is not None:
+            SESSION.stop()
+            SESSION = None
+    SCHEDULER.panic()
+    return jsonify({"ok": True})
+
+
 @app.route("/api/stream")
 def stream():
     def gen():
@@ -529,6 +549,23 @@ def main():
         print(f"[midi] WARNING: {SCHEDULER._port_error}", flush=True)
         print(f"[midi] Available ports: {MIDIScheduler.list_ports()}", flush=True)
         print("[midi] Continuing without MIDI output (piano roll still works).", flush=True)
+
+    def _shutdown():
+        print("\n[server] shutdown → sending All Sound Off ...", flush=True)
+        global SESSION
+        if SESSION is not None:
+            SESSION.stop()
+            SESSION = None
+        SCHEDULER.panic()
+
+    atexit.register(_shutdown)
+
+    def _sig_handler(sig, frame):
+        _shutdown()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT,  _sig_handler)
+    signal.signal(signal.SIGTERM, _sig_handler)
 
     print(f"\n  ThemeTransformer Web  →  http://{args.host}:{args.port}\n", flush=True)
     app.run(host=args.host, port=args.port, threaded=True, debug=False)

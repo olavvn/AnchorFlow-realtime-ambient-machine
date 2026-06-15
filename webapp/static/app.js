@@ -291,6 +291,9 @@ function fmt(s) {
 // ── 이벤트 바인딩 ────────────────────────────────────────────
 $("start-btn").addEventListener("click", start);
 $("stop-btn").addEventListener("click", stop);
+$("panic-btn").addEventListener("click", async () => {
+  try { await fetch("/api/panic", { method: "POST" }); } catch (e) {}
+});
 $("temp").addEventListener("input", e => $("temp-val").textContent = parseFloat(e.target.value).toFixed(2));
 $("topp").addEventListener("input", e => $("topp-val").textContent = parseFloat(e.target.value).toFixed(2));
 $("pmin").addEventListener("input", e => $("pmin-val").textContent = e.target.value);

@@ -58,6 +58,8 @@ button:disabled{opacity:.4; cursor:not-allowed}
 .primary:hover:not(:disabled){filter:brightness(1.1)}
 .ghost{background:var(--panel2); color:var(--text); border:1px solid var(--line)}
 .ghost:hover:not(:disabled){border-color:var(--anchor2); color:var(--anchor2)}
+.panic{background:transparent; color:var(--anchor2); border:1px solid var(--anchor2); flex:1; font-size:12px}
+.panic:hover{background:rgba(255,95,109,.15)}
 
 .meters{margin-top:18px; display:flex; flex-direction:column; gap:12px}
 .meter{display:flex; align-items:center; gap:10px; font-size:12px; color:var(--muted)}
