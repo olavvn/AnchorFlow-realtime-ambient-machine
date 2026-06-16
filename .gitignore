@@ -1,2 +1,13 @@
 .DS_Store
 __pycache__
+theme_files
+
+# Keep webapp/assets subdirectories but ignore files inside them
+webapp/assets/seeds/*
+!webapp/assets/seeds/.gitkeep
+webapp/assets/anchors/*
+!webapp/assets/anchors/.gitkeep
+
+# Keep trained_model directory but ignore files inside them
+trained_model/*
+!trained_model/.gitkeep
