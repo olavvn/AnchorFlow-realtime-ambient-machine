@@ -11,3 +11,4 @@ webapp/assets/anchors/*
 # Keep trained_model directory but ignore files inside them
 trained_model/*
 !trained_model/.gitkeep
+CLAUDE.md
