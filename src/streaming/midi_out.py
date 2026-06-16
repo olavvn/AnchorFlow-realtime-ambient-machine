@@ -167,9 +167,14 @@ class MIDIOutputEngine(threading.Thread):
 
         while not self._stop_event.is_set():
             try:
-                kind, tokens = self.token_queue.get(timeout=0.5)
+                item = self.token_queue.get(timeout=0.5)
             except queue.Empty:
                 continue
+
+            if len(item) == 3:
+                kind, label, tokens = item
+            else:
+                kind, tokens = item
 
             for tok_id in tokens:
                 if self._stop_event.is_set():

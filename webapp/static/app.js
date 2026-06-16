@@ -20,6 +20,8 @@ const COLORS = {
   gen_PAD:       "#39d98a",
   anchor_MELODY: "#ffb454",
   anchor_PAD:    "#ff7eb6",
+  theme_MELODY:  "#a16eff",
+  theme_PAD:     "#d1a3ff",
 };
 function noteColor(src, track) {
   return COLORS[src + "_" + track] || "#5b8cff";
@@ -90,6 +92,7 @@ async function start() {
     top_p:       parseFloat($("topp").value),
     time_scale:  parseFloat($("tscale").value),
     theme_recur_sec: parseFloat($("trecur").value),
+    theme_recur_mode: $("trecur-mode").value,
     min_force_shift: parseInt($("mgap").value),
     pitch_min:   parseInt($("pmin").value),
     pitch_max:   parseInt($("pmax").value),
@@ -226,7 +229,7 @@ function draw() {
   for (const m of markers) {
     if (m.t < t0 - 1 || m.t > t1) continue;
     const x = xOf(m.t);
-    ctx.strokeStyle = m.src === "seed" ? "rgba(91,140,255,.6)" : "rgba(255,180,84,.8)";
+    ctx.strokeStyle = m.src === "seed" ? "rgba(91,140,255,.6)" : (m.src === "theme" ? "rgba(161,110,255,.8)" : "rgba(255,180,84,.8)");
     ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
     ctx.setLineDash([]);
@@ -303,7 +306,15 @@ $("panic-btn").addEventListener("click", async () => {
 $("temp").addEventListener("input", e => $("temp-val").textContent = parseFloat(e.target.value).toFixed(2));
 $("topp").addEventListener("input", e => $("topp-val").textContent = parseFloat(e.target.value).toFixed(2));
 $("tscale").addEventListener("input", e => $("tscale-val").textContent = parseFloat(e.target.value).toFixed(2));
-$("trecur").addEventListener("input", e => $("trecur-val").textContent = (parseInt(e.target.value) === 0 ? "off" : e.target.value + "s"));
+$("trecur").addEventListener("input", e => $("trecur-val").textContent = e.target.value + "s");
+$("trecur-mode").addEventListener("change", e => {
+  const val = e.target.value;
+  if (val === "interval") {
+    $("trecur-slider-label").style.display = "flex";
+  } else {
+    $("trecur-slider-label").style.display = "none";
+  }
+});
 $("mgap").addEventListener("input", e => $("mgap-val").textContent = e.target.value);
 $("pmin").addEventListener("input", e => $("pmin-val").textContent = e.target.value);
 $("pmax").addEventListener("input", e => $("pmax-val").textContent = e.target.value);

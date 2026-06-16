@@ -36,6 +36,7 @@ class ChunkGenerator(threading.Thread):
                  top_p: float = 0.9,
                  time_scale: float = 1.0,
                  theme_recur_sec: float = 0.0,
+                 theme_recur_mode: str = "auto",
                  pitch_min: int = 0,
                  pitch_max: int = 127,
                  max_timeshift: int = 25,
@@ -79,6 +80,9 @@ class ChunkGenerator(threading.Thread):
         # `theme_recur_sec` seconds of generated music (0 = disabled).
         self.time_scale = time_scale
         self.theme_recur_sec = theme_recur_sec
+        self.theme_recur_mode = theme_recur_mode
+        self._ts_id = self.vocab.token2id["Theme_Start"]
+        self._te_id = self.vocab.token2id["Theme_End"]
         self._current_theme_tokens: list[int] = []
         self._music_sec = 0.0        # generated musical seconds (time_scale applied)
         self._last_theme_sec = 0.0   # _music_sec at the last theme presence
@@ -151,12 +155,24 @@ class ChunkGenerator(threading.Thread):
             return self._mask_dur[track]
         if cat == "dur":
             return self._mask_vel[track]
+
         # free state: apply density caps (mutually exclusive triggers)
         if self._consec_shifts >= self.max_consec_shifts:
-            return self._mask_free_note
-        if self._notes_since_shift >= self.max_consec_notes:
-            return self._mask_free_shift
-        return self._mask_free_both
+            base_mask = self._mask_free_note
+        elif self._notes_since_shift >= self.max_consec_notes:
+            base_mask = self._mask_free_shift
+        else:
+            base_mask = self._mask_free_both
+
+        if self.theme_recur_mode == "auto":
+            mask = base_mask.copy()
+            if self.previous_labeled:
+                mask[self._te_id] = True
+            else:
+                mask[self._ts_id] = True
+            return mask
+
+        return base_mask
 
     # ── public API ────────────────────────────────────────────────────────────
 
@@ -379,7 +395,7 @@ class ChunkGenerator(threading.Thread):
         # 1b. Periodic theme recurrence: literally restate the current theme
         # (played + re-grounds conditioning) so its color persists until the next
         # anchor, per the seed/anchor "inserted theme is heard" principle.
-        if (self.theme_recur_sec > 0 and self._current_theme_tokens
+        if (self.theme_recur_mode == "interval" and self.theme_recur_sec > 0 and self._current_theme_tokens
                 and (self._music_sec - self._last_theme_sec) >= self.theme_recur_sec):
             toks = self._reinject_theme()
             if toks:
@@ -391,7 +407,7 @@ class ChunkGenerator(threading.Thread):
         while len(chunk) < self.chunk_size and not self._stop_event.is_set():
             if not self.anchor_queue.empty():
                 break   # handle a pending anchor promptly
-            if (self.theme_recur_sec > 0 and self._current_theme_tokens
+            if (self.theme_recur_mode == "interval" and self.theme_recur_sec > 0 and self._current_theme_tokens
                     and (self._music_sec - self._last_theme_sec) >= self.theme_recur_sec):
                 break   # theme recurrence is due → flush chunk, re-inject next pass
             tok_id = self._sample_next()

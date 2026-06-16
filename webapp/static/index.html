@@ -1,21 +1,23 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ThemeTransformer · 실시간 앰비언트 스트리밍</title>
-<link rel="stylesheet" href="/static/style.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ThemeTransformer · Real Time Ambient Streaming</title>
+  <link rel="stylesheet" href="/static/style.css" />
 </head>
+
 <body>
   <header>
     <div class="title">
       <span class="logo">◈</span> ThemeTransformer
-      <span class="sub">Theme 조건 · Seed 시작 · Anchor 리터럴 주입 · loopMIDI 출력</span>
+      <span class="sub">Theme · Seed · Anchor · loopMIDI</span>
     </div>
     <div class="badges">
       <span id="device-badge" class="badge">device: …</span>
-      <span id="midi-badge"   class="badge">MIDI: …</span>
-      <span id="state-badge"  class="badge state-idle">idle</span>
+      <span id="midi-badge" class="badge">MIDI: …</span>
+      <span id="state-badge" class="badge state-idle">idle</span>
     </div>
   </header>
 
@@ -23,13 +25,13 @@
     <!-- 좌측: 컨트롤 -->
     <section class="panel controls">
 
-      <h2>1 · Seed 선택</h2>
+      <h2>1 · Select Seed </h2>
       <label class="field">
-        <span>Seed MIDI <small>(인코더 theme 조건)</small></span>
+        <span>Seed MIDI <small>(Encoder theme )</small></span>
         <select id="seed-select"></select>
       </label>
 
-      <h2>2 · 샘플링</h2>
+      <h2>2 · Sampling</h2>
       <label class="slider">
         <span>temperature <b id="temp-val">1.20</b></span>
         <input type="range" id="temp" min="0.5" max="2.0" step="0.01" value="1.2" />
@@ -42,9 +44,17 @@
         <span>time scale <b id="tscale-val">1.00</b></span>
         <input type="range" id="tscale" min="0.2" max="1.0" step="0.05" value="1.0" />
       </label>
-      <label class="slider">
-        <span>theme recur <b id="trecur-val">16s</b></span>
-        <input type="range" id="trecur" min="0" max="40" step="2" value="16" />
+      <label class="field">
+        <span>theme recur mode</span>
+        <select id="trecur-mode">
+          <option value="auto" selected>Auto (Model-decided)</option>
+          <option value="interval">Interval (Rule-based)</option>
+          <option value="off">Off</option>
+        </select>
+      </label>
+      <label class="slider" id="trecur-slider-label" style="display: none;">
+        <span>theme recur interval <b id="trecur-val">16s</b></span>
+        <input type="range" id="trecur" min="2" max="40" step="2" value="16" />
       </label>
       <label class="slider">
         <span>min gap <b id="mgap-val">12</b></span>
@@ -59,7 +69,7 @@
         <input type="range" id="pmax" min="0" max="127" step="1" value="127" />
       </label>
 
-      <h2>3 · 재생</h2>
+      <h2>3 · Play</h2>
       <div class="btn-row">
         <button id="start-btn" class="primary">▶ 시작</button>
         <button id="stop-btn" class="ghost" disabled>■ 정지</button>
@@ -70,19 +80,21 @@
 
       <div class="meters">
         <div class="meter">
-          <span>생성 앞서기</span>
-          <div class="bar"><div id="buf-bar"></div></div>
+          <span>Buffer</span>
+          <div class="bar">
+            <div id="buf-bar"></div>
+          </div>
           <b id="buf-val">0.0s</b>
         </div>
         <div class="meter">
-          <span>재생시간</span><b id="clock">0:00</b>
+          <span>Time</span><b id="clock">0:00</b>
         </div>
         <div class="meter">
-          <span>노트</span><b id="note-count">0</b>
+          <span>Notes</span><b id="note-count">0</b>
         </div>
       </div>
 
-      <h2>MIDI 포트</h2>
+      <h2>MIDI Port</h2>
       <div class="port-info">
         <div class="port-row"><span class="port-label melody-dot">MELODY</span><span id="port-melody">–</span></div>
         <div class="port-row"><span class="port-label pad-dot">PAD</span><span id="port-pad">–</span></div>
@@ -92,26 +104,30 @@
     <!-- 중앙: 피아노롤 -->
     <section class="panel roll-panel">
       <div class="roll-head">
-        <h2>실시간 피아노롤</h2>
+        <h2>Real Time Piano Roll</h2>
         <div class="legend">
-          <span class="lg seed">Seed</span>
-          <span class="lg melody">MELODY</span>
-          <span class="lg pad">PAD</span>
-          <span class="lg anchor">Anchor</span>
+          <span class="lg melody">Melody (Seed/Gen)</span>
+          <span class="lg pad">Pad (Seed/Gen)</span>
+          <span class="lg anchor-melody">Anchor Melody</span>
+          <span class="lg anchor-pad">Anchor Pad</span>
+          <span class="lg theme-melody">Theme Melody</span>
+          <span class="lg theme-pad">Theme Pad</span>
         </div>
       </div>
       <canvas id="roll"></canvas>
-      <div id="hint" class="hint">Theme를 고르고 ▶ 를 누르면 생성이 시작됩니다.</div>
+      <div id="hint" class="hint">Select Theme and click ▶.</div>
     </section>
 
     <!-- 우측: Anchor 주입 -->
     <section class="panel anchors">
-      <h2>Anchor 주입</h2>
-      <p class="desc">클릭하면 현재 컨텍스트에 <b>리터럴 삽입</b>되고, 모델이 그 패턴으로 자연스럽게 이어갑니다.</p>
+      <h2>Insert Anchor</h2>
+      <p class="desc">Click to insert the literal into the current context, and the model will naturally continue the
+        pattern.</p>
       <div id="anchor-list" class="chip-list"></div>
     </section>
   </main>
 
   <script src="/static/app.js"></script>
 </body>
+
 </html>

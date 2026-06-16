@@ -43,6 +43,7 @@ class ThemeStreamEngine:
         max_len: int = 512,
         temp: float = 1.2,
         top_p: float = 0.9,
+        theme_recur_mode: str = "auto",
         pitch_min: int = 0,
         pitch_max: int = 127,
         cuda: bool | None = None,
@@ -93,6 +94,7 @@ class ThemeStreamEngine:
             max_len=max_len,
             temp=temp,
             top_p=top_p,
+            theme_recur_mode=theme_recur_mode,
             pitch_min=pitch_min,
             pitch_max=pitch_max,
         )
@@ -137,7 +139,7 @@ class ThemeStreamEngine:
 
         self._midi_engine.start()
         self._generator.start()
-        print("[engine] streaming started – press Ctrl+C or call stop() to end")
+        print("[engine] streaming started - press Ctrl+C or call stop() to end")
 
     def stop(self):
         self._generator.stop()

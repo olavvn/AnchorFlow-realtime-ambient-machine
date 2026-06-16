@@ -3,6 +3,8 @@
   --text:#e7ecf5; --muted:#8a93a8; --accent:#6c8cff;
   --melody:#5b8cff; --pad:#39d98a; --anchor:#ffb454; --anchor2:#ff5f6d;
   --seed:#5b8cff;
+  --anchor-melody:#ffb454; --anchor-pad:#ff7eb6;
+  --theme-melody:#a16eff; --theme-pad:#d1a3ff;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
@@ -77,13 +79,15 @@ button:disabled{opacity:.4; cursor:not-allowed}
 .roll-panel{display:flex; flex-direction:column; padding:0; overflow:hidden}
 .roll-head{display:flex; align-items:center; justify-content:space-between; padding:14px 16px 8px; flex-shrink:0}
 .roll-head h2{margin:0}
-.legend{display:flex; gap:12px; font-size:12px; color:var(--muted)}
+.legend{display:flex; gap:12px; font-size:12px; color:var(--muted); flex-wrap:wrap; justify-content:flex-end}
 .lg{display:flex; align-items:center; gap:5px}
 .lg::before{content:""; width:10px; height:10px; border-radius:3px; display:inline-block}
-.lg.seed::before   {background:var(--seed)}
-.lg.melody::before {background:var(--melody)}
-.lg.pad::before    {background:var(--pad)}
-.lg.anchor::before {background:var(--anchor)}
+.lg.melody::before        {background:var(--melody)}
+.lg.pad::before           {background:var(--pad)}
+.lg.anchor-melody::before {background:var(--anchor-melody)}
+.lg.anchor-pad::before    {background:var(--anchor-pad)}
+.lg.theme-melody::before  {background:var(--theme-melody)}
+.lg.theme-pad::before     {background:var(--theme-pad)}
 #roll{flex:1; width:100%; display:block; min-height:0}
 .hint{padding:10px 16px; font-size:12px; color:var(--muted); border-top:1px solid var(--line); flex-shrink:0}
 

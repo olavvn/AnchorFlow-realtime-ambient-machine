@@ -54,6 +54,7 @@ class TSDStreamingDecoder:
         self.t = 0.0
         self._pending: Optional[dict] = None
         self._buf: List[int] = []   # 미완성 Note-On/Duration 보관
+        self.in_theme = False
 
     def feed(self, token_ids: List[int], src: str) -> List[dict]:
         toks = self._buf + list(token_ids)
@@ -66,7 +67,21 @@ class TSDStreamingDecoder:
         while i < n:
             tok = id2.get(toks[i], "padding")
 
-            if tok.startswith("Time-Shift_"):
+            if tok == "Theme_Start":
+                self.in_theme = True
+                events.append({
+                    "kind": "marker",
+                    "t": round(self.t, 4),
+                    "src": "theme",
+                    "label": "THEME",
+                })
+                i += 1
+
+            elif tok == "Theme_End":
+                self.in_theme = False
+                i += 1
+
+            elif tok.startswith("Time-Shift_"):
                 steps = int(tok.split("_")[1])
                 self.t += steps * self.vocab.time_resolution * self.time_scale
                 i += 1
@@ -96,7 +111,7 @@ class TSDStreamingDecoder:
                     "dur":   self._pending["dur"],
                     "vel":   vel,
                     "track": self._pending["track"],
-                    "src":   src,
+                    "src":   "theme" if self.in_theme else src,
                 })
                 self._pending = None
                 i += 1
@@ -265,6 +280,7 @@ class WebSession:
         prebuffer: float = 4.0,
         time_scale: float = 1.0,
         theme_recur_sec: float = 16.0,
+        theme_recur_mode: str = "auto",
         min_force_shift: int = 12,
     ):
         self.vocab      = vocab
@@ -294,6 +310,7 @@ class WebSession:
             chunk_size=chunk_size, max_len=max_len,
             temp=temp, top_p=top_p,
             time_scale=time_scale, theme_recur_sec=theme_recur_sec,
+            theme_recur_mode=theme_recur_mode,
             min_force_shift=min_force_shift,
             pitch_min=pitch_min, pitch_max=pitch_max,
         )
@@ -534,6 +551,7 @@ def start():
             prebuffer=float(data.get("prebuffer", 4.0)),
             time_scale=float(data.get("time_scale", 1.0)),
             theme_recur_sec=float(data.get("theme_recur_sec", 16.0)),
+            theme_recur_mode=data.get("theme_recur_mode", "auto"),
             min_force_shift=int(data.get("min_force_shift", 12)),
         )
         sess.start()

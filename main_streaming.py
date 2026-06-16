@@ -51,6 +51,8 @@ def parse_args():
                    help="Sampling temperature")
     p.add_argument("--top-p", type=float, default=0.9,
                    help="Nucleus sampling p")
+    p.add_argument("--theme-recur-mode", default="auto", choices=["auto", "interval", "off"],
+                   help="Theme recurrence mode ('auto' = model decides, 'interval' = rule-based recurring, 'off' = disabled)")
     p.add_argument("--pitch-min", type=int, default=0)
     p.add_argument("--pitch-max", type=int, default=127)
     p.add_argument("--cuda", action="store_true",
@@ -83,6 +85,7 @@ def main():
         max_len=args.max_len,
         temp=args.temp,
         top_p=args.top_p,
+        theme_recur_mode=args.theme_recur_mode,
         pitch_min=args.pitch_min,
         pitch_max=args.pitch_max,
         cuda=args.cuda or None,
