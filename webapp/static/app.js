@@ -9,7 +9,7 @@ const $ = (id) => document.getElementById(id);
 
 // ── 피아노롤 파라미터 ─────────────────────────────────────────
 const WINDOW_PAST   = 4.0;   // 플레이헤드 뒤로 보일 구간(초)
-const WINDOW_FUTURE = 30.0;  // 앞으로 보일 구간(초)
+const WINDOW_FUTURE = 12.0;  // 앞으로 보일 구간(초) — prebuffer/lead 규모에 맞춤
 const PRUNE_AGE     = 10.0;  // 이보다 오래된 노트 폐기
 
 // ── 색상 ─────────────────────────────────────────────────────
@@ -89,6 +89,8 @@ async function start() {
     temperature: parseFloat($("temp").value),
     top_p:       parseFloat($("topp").value),
     time_scale:  parseFloat($("tscale").value),
+    theme_recur_sec: parseFloat($("trecur").value),
+    min_force_shift: parseInt($("mgap").value),
     pitch_min:   parseInt($("pmin").value),
     pitch_max:   parseInt($("pmax").value),
     chunk_size:  32,
@@ -264,7 +266,7 @@ function draw() {
     const maxT = notes.length ? Math.max(...notes.map(n => n.t + n.dur)) : 0;
     const buf  = Math.max(0, maxT - ph);
     $("buf-val").textContent = buf.toFixed(1) + "s";
-    $("buf-bar").style.width = Math.min(100, buf / 20 * 100) + "%";
+    $("buf-bar").style.width = Math.min(100, buf / 12 * 100) + "%";
     $("clock").textContent   = fmt(Math.max(0, ph));
   }
 
@@ -301,6 +303,8 @@ $("panic-btn").addEventListener("click", async () => {
 $("temp").addEventListener("input", e => $("temp-val").textContent = parseFloat(e.target.value).toFixed(2));
 $("topp").addEventListener("input", e => $("topp-val").textContent = parseFloat(e.target.value).toFixed(2));
 $("tscale").addEventListener("input", e => $("tscale-val").textContent = parseFloat(e.target.value).toFixed(2));
+$("trecur").addEventListener("input", e => $("trecur-val").textContent = (parseInt(e.target.value) === 0 ? "off" : e.target.value + "s"));
+$("mgap").addEventListener("input", e => $("mgap-val").textContent = e.target.value);
 $("pmin").addEventListener("input", e => $("pmin-val").textContent = e.target.value);
 $("pmax").addEventListener("input", e => $("pmax-val").textContent = e.target.value);
 

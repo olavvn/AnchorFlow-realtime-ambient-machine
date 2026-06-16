@@ -111,8 +111,30 @@ class myLM(nn.Module):
         out = self.output_layer(out)
 
         return out
-    
-    
+
+    ########################################
+    # streaming fast-path: split encode / decode so the encoder theme
+    # memory can be cached and reused across autoregressive steps.
+    ########################################
+    def encode_theme(self, src):
+        """Run the encoder once over a theme sequence; returns cacheable memory."""
+        src = self.token_embedding(src)
+        src = self.pos_encoding(src)
+        return self.transformer_model.encoder(src)
+
+    def decode_step(self, tgt, memory, tgt_label, tgt_mask=None):
+        """Decoder forward against a precomputed (cached) encoder memory."""
+        tgt_emb = self.token_embedding(tgt)
+        att_cross_pos_enc = self.transformer_model.pos_enc.get_segment_pos_enc(tgt_label)
+        out = self.transformer_model.decoder(
+            tgt_emb, memory,
+            tgt_mask=tgt_mask,
+            tgt_label=tgt_label,
+            att_cross_pos_enc=att_cross_pos_enc,
+        )
+        return self.output_layer(out)
+
+
     ########################################
     # search strategy: temperature (re-shape)
     ########################################
