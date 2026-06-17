@@ -366,3 +366,41 @@ Note-Off는 전용 스레드). theme은 시작 시 `--theme`로 고정, anchor�
 `TokenChunkQueue` 항목이 `(kind, tokens)` 2-튜플로 웹(3-튜플)과 다르다. 웹 경로가 운영 대상,
 CLI는 로컬 점검용.
 ```
+
+## 13. 실시간 시그널 플로우 (Signal Flow)
+
+현재 웹 기반 스트리밍 시스템의 실제 데이터 흐름 및 스레드 간 상호작용 도식입니다.
+
+```mermaid
+graph TD
+    subgraph "Web UI (웹 브라우저 프론트엔드)"
+        A["사용자 화면 (HTML/JS)"] -- "① 앵커 변경 요청 (POST /api/anchor)" --> B
+        I["피아노 롤 시각화 (Canvas)"]
+    end
+
+    subgraph "Flask Backend (파이썬 백엔드 스레드)"
+        B["Flask 라우트 (/api/anchor)"] -- "② 앵커 이벤트 전달" --> C["Anchor Queue (큐)"]
+        
+        subgraph "Generator Thread (생성 스레드)"
+            C --> D["ChunkGenerator (chunk_gen.py)"]
+            D -- "③ 테마 메모리 갱신 & 디코더 리셋" --> D
+            D -- "④ 자동회귀 Chunk 생성 (로짓 마스킹)" --> E["Token Queue (큐)"]
+        end
+        
+        subgraph "Reader & Scheduler (재생 및 소비 스레드)"
+            E --> F["Reader Loop (_reader_loop)"]
+            F -- "⑤b 이벤트 Enqueue" --> H["SSE Queue (큐)"]
+            F -- "⑤a 밀리초 단위 정밀 스케줄링" --> G["MIDIScheduler (우선순위 큐 Heap)"]
+        end
+        
+        G -- "⑦ 실시간 MIDI 송출" --> J["python-rtmidi (C++ 직접 바인딩)"]
+        F -- "⑥ 실시간 음표 스트리밍 (SSE: /api/stream)" --> I
+    end
+
+    subgraph "OS & 외부 오디오 시스템"
+        J -- "⑧ 원시 MIDI 신호 (0x90, Pitch, Vel)" --> K["loopMIDI (가상 포트 드라이버)"]
+        K -- "⑨ 실시간 입력 수신" --> L["DAW (VST 가상 악기 / Synthesizer)"]
+        L --> M["앰비언트 오디오 스피커 출력"]
+    end
+```
+
