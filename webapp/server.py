@@ -145,6 +145,8 @@ class MIDIScheduler:
         self._wall_start  = 0.0
         self._thread: Optional[threading.Thread] = None
         self._port_error  = ""
+        # (track,pitch) -> (현재 보이스의 note-off 시각, 그 off 항목의 취소 플래그)
+        self._voice: dict = {}
 
     def open_ports(self) -> bool:
         try:
@@ -185,6 +187,7 @@ class MIDIScheduler:
         self._wall_start = wall_start
         with self._lock:
             self._pq = []            # drop any stale events from a prior session
+            self._voice.clear()
         self._stop.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
@@ -200,20 +203,42 @@ class MIDIScheduler:
                     port.send_message([0xB0 | ch, 123, 0])  # All Notes Off
             except Exception:
                 pass
+        with self._lock:
+            self._voice.clear()   # 모든 음이 꺼졌으므로 보이스 상태도 초기화
 
     def stop(self):
         self._stop.set()
         self.panic()
 
     def schedule(self, event: dict):
+        """같은 (track,pitch)가 아직 울리는 중이면 재타건하지 않고 note-off만 뒤로
+        연장(tie)한다. MIDI는 (채널,pitch)당 상태가 하나뿐이라, 겹치는 같은 음을
+        그대로 보내면 (a) NOTE_ON 재전송으로 어택이 다시 들리고 (b) 앞 노트의
+        NOTE_OFF가 뒤 노트까지 꺼버려 지속음이 여러 노트로 쪼개져 들린다."""
         if event.get("kind") != "note":
             return
+        key    = (event["track"], event["pitch"])
         on_at  = self._wall_start + event["t"]
         off_at = on_at + event["dur"]
-        c = next(self._cnt)
+        EPS    = 1e-6
+
         with self._lock:
-            heapq.heappush(self._pq, (on_at,  c,     "on",  event))
-            heapq.heappush(self._pq, (off_at, c+0.5, "off", event))
+            prev = self._voice.get(key)
+            if prev is not None and on_at < prev[0] - EPS:
+                # 아직 울리는 중인 같은 음 → 재타건 금지, note-off만 뒤로 밀어 tie.
+                if off_at <= prev[0] + EPS:
+                    return                       # 기존 노트에 완전히 포함 → 버림
+                prev[1]["cancelled"] = True      # 옛 note-off 항목 무효화
+                flag = {"cancelled": False}
+                self._voice[key] = (off_at, flag)
+                heapq.heappush(self._pq, (off_at, next(self._cnt), "off", event, flag))
+                return
+            # 겹치지 않음 → 별개의 노트로 정상 타건
+            c = next(self._cnt)
+            flag = {"cancelled": False}
+            self._voice[key] = (off_at, flag)
+            heapq.heappush(self._pq, (on_at,  c,     "on",  event, None))
+            heapq.heappush(self._pq, (off_at, c+0.5, "off", event, flag))
 
     def _loop(self):
         while not self._stop.is_set():
@@ -237,7 +262,13 @@ class MIDIScheduler:
             with self._lock:
                 if not self._pq or self._pq[0][0] > time.perf_counter():
                     continue
-                fire_at, _, kind, ev = heapq.heappop(self._pq)
+                fire_at, _, kind, ev, flag = heapq.heappop(self._pq)
+
+                # schedule()이 tie로 note-off를 뒤로 밀면서 무효화한 항목은 폐기.
+                # 이걸 보내면 아직 울려야 할 같은 pitch가 조기에 꺼져서
+                # 지속음이 여러 노트로 쪼개져 들린다.
+                if flag is not None and flag["cancelled"]:
+                    continue
 
             port = self._melody_out if ev["track"] == "MELODY" else self._pad_out
             if port is None:
