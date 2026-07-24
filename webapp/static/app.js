@@ -47,10 +47,10 @@ async function loadLibrary() {
   $("port-melody").textContent = ports.melody || "–";
   $("port-pad").textContent    = ports.pad    || "–";
   if (ports.error) {
-    $("midi-badge").textContent = "MIDI: 미연결";
+    $("midi-badge").textContent = "MIDI: unconnected";
     $("midi-badge").classList.add("err");
   } else {
-    $("midi-badge").textContent = "MIDI: 연결됨";
+    $("midi-badge").textContent = "MIDI: connected";
     $("midi-badge").classList.add("ok");
   }
 
